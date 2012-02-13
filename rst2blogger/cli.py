@@ -31,6 +31,8 @@ def main():
                         help='title of the blog to receive the new draft')
     parser.add_argument('filename', action='store',
                         help='reST input file')
+    parser.add_argument('-a', '--authfile', action='store',
+                        help='auth file',)
     options = parser.parse_args()
 
     # Set up console encoding
@@ -43,16 +45,33 @@ def main():
 
     # Start by parsing the file locally in case there is a problem
     # and we can avoid the authentication step.
-    post_title, post_content = rst2post.format_post(options.filename)
-    print "\nTitle: '%s'\n" % post_title
+    formatter = rst2post.RST2Blogspot()
+    post_title, post_content = formatter.format_post(options.filename)
 
     # Authenticate using ClientLogin, AuthSub, or OAuth.
     client = gdata.blogger.client.BloggerClient()
+
+    if options.authfile is not None:
+        fc = open("/home/koder/Dropbox/gauth.txt").readlines()
+        login = fc[0].split('=')[1]
+        passwd = fc[1].split('=')[1]
+        target_blog_id = fc[2].split('=')[1]
+    else:
+        login = None
+        passwd = None
+        target_blog_id = None
+    
     for i in range(3):
         try:
-            gdata.sample_util.authorize_client(
-                client, service='blogger', source='rst2blogger.py',
-                scopes=['http://www.blogger.com/feeds/'])
+            if login is not None:
+                client.ClientLogin(login, passwd, 
+                            account_type='GOOGLE', source='rst2blogger.py',
+                            service='blogger')
+            else:
+                gdata.sample_util.authorize_client(
+                   client, service='blogger', source='rst2blogger.py',
+                   scopes=['http://www.blogger.com/feeds/'])
+
         except (ValueError, gdata.client.BadAuthentication) as err:
             print
             print 'Failed to authenticate:', err
@@ -62,23 +81,28 @@ def main():
     else:
         raise RuntimeError, 'Authentication failure'
 
-    # Get the ID for the blog
-    print 'Retreiving blog list'
-    feed = client.get_blogs()
-    blogs_by_title = dict( (b.title.text, b)
-                           for b in feed.entry
-                           )
-    if not options.blog:
-        if len(blogs_by_title.keys()) == 1:
-            options.blog = blogs_by_title.keys()[0]
-        else:
-            print 'Available blogs:'
-            for t in sorted(blogs_by_title.keys()):
-                print u'- %s' % t
-            print
-            raise RuntimeError, 'Please specify the blog title with --blog'
-    target_blog = blogs_by_title[options.blog]
-    target_blog_id = target_blog.get_blog_id()
+    if target_blog_id is None:
+        # Get the ID for the blog
+        print 'Retreiving blog list'
+        feed = client.get_blogs()
+        blogs_by_title = dict( (b.title.text, b)
+                               for b in feed.entry
+                               )
+        
+        if not options.blog:
+            if len(blogs_by_title.keys()) == 1:
+                options.blog = blogs_by_title.keys()[0]
+            else:
+                print 'Available blogs:'
+                for t in sorted(blogs_by_title.keys()):
+                    print u'- %s' % t
+                print
+                raise RuntimeError, 'Please specify the blog title with --blog'
+
+        target_blog = blogs_by_title[options.blog.decode('utf8')]
+        target_blog_id = target_blog.get_blog_id()
+
+    print "target_blog_id =", repr(target_blog_id)
 
     # We will look for a post with the same title in the last week, in
     # case this is a work-in-progress that needs to be updated. We
