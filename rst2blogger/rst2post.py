@@ -47,7 +47,7 @@ class RST2Blogspot(object):
         an HTML string for the post.
         """
         self.clear()
-        body = open(rst_file).read() + '\n' + footer
+        body = open(rst_file).read().decode('utf8') + '\n' + footer
         return self.format_post_from_string(body)
 
     def format_post_from_string(self, body):
@@ -67,7 +67,8 @@ class RST2Blogspot(object):
             if not html:
                 raise ValueError('No HTML produced by docutils')
         except Exception as err:
-            raise RuntimeError('Could not convert input file to HTML: %s' % err)
+            raise
+            #raise RuntimeError('Could not convert input file to HTML: %s' % err)
 
         # Pull out the body of the HTML to make the blog post,
         # removing the H1 element with the title.
